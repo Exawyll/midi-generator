@@ -1,16 +1,17 @@
 # ── Stage 1 : build du frontend React ────────────────────────────────────────
 FROM node:20-slim AS frontend-builder
 
-WORKDIR /app/frontend
+WORKDIR /build
 
-# Installer les dépendances d'abord (cache Docker)
-COPY frontend/package*.json ./
-RUN npm ci --silent
+# Copier tout le frontend en une seule passe (node_modules exclu via .dockerignore)
+COPY frontend/ .
 
-# Copier les sources et builder
-COPY frontend/ ./
+# npm install (pas npm ci) pour éviter les conflits de lockfile cross-platform
+# --include=dev force l'installation des devDependencies (vite, @vitejs/plugin-react)
+RUN npm install --include=dev
+
 RUN npm run build
-# → produit frontend/dist/
+# → produit /build/dist/
 
 # ── Stage 2 : backend Python + static files ───────────────────────────────────
 FROM python:3.11-slim
@@ -25,7 +26,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 
 # Fichiers statiques du frontend buildé
-COPY --from=frontend-builder /app/frontend/dist ./static
+COPY --from=frontend-builder /build/dist ./static
 
 ENV PORT=8080
 
