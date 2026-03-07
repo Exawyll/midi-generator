@@ -31,18 +31,36 @@ substitutions:
   _IMAGE: europe-west1-docker.pkg.dev/midi-generator-489519/midi-generator/app
 
 steps:
-  # ── 1. Build de l'image Docker (multi-stage : React build + Python) ──────────
+  # ── 1. Build du frontend dans le worker Cloud Build (pas dans Docker) ────────
+  # Évite le bug npm "Exit handler never called" qui survient quand npm tourne
+  # dans un Docker imbriqué sur les workers Cloud Build.
+  - name: node:22
+    id: npm-install
+    dir: midi-generator/frontend
+    entrypoint: npm
+    args: [install, --include=dev]
+
+  - name: node:22
+    id: npm-build
+    waitFor: [npm-install]
+    dir: midi-generator/frontend
+    entrypoint: npm
+    args: [run, build]
+  # → produit midi-generator/frontend/dist/ dans le workspace
+
+  # ── 2. Build de l'image Docker (copie le dist/ déjà buildé) ─────────────────
   - name: gcr.io/cloud-builders/docker
     id: build
+    waitFor: [npm-build]
     args:
       - build
       - -t
       - $_IMAGE:$COMMIT_SHA
       - -t
       - $_IMAGE:latest
-      - midi-generator   # répertoire contenant le Dockerfile
+      - midi-generator
 
-  # ── 2. Push vers Artifact Registry ──────────────────────────────────────────
+  # ── 3. Push vers Artifact Registry ──────────────────────────────────────────
   - name: gcr.io/cloud-builders/docker
     id: push
     waitFor: [build]
@@ -51,7 +69,7 @@ steps:
       - --all-tags
       - $_IMAGE
 
-  # ── 3. Déploiement sur Cloud Run ─────────────────────────────────────────────
+  # ── 4. Déploiement sur Cloud Run ─────────────────────────────────────────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy
     waitFor: [push]

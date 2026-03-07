@@ -1,15 +1,5 @@
-# ── Stage 1 : build du frontend React ────────────────────────────────────────
-FROM node:22-slim AS frontend-builder
-
-WORKDIR /build
-
-COPY frontend/ .
-
-RUN npm install --include=dev
-RUN npm run build
-# → produit /build/dist/
-
-# ── Stage 2 : backend Python + static files ───────────────────────────────────
+# Image légère : le frontend est buildé en amont par Cloud Build (step node:22)
+# Le dist/ est déjà présent dans le workspace quand ce Dockerfile s'exécute.
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -19,7 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./
 
-COPY --from=frontend-builder /build/dist ./static
+# dist/ généré par le step npm-build de cloudbuild.yaml
+COPY frontend/dist ./static
 
 ENV PORT=8080
 
