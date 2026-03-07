@@ -6,8 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Forward /api/* calls to the FastAPI backend
-      "/api": "http://localhost:8000",
+      "/api":  "http://localhost:8000",
+      "/auth": "http://localhost:8000",
     },
   },
 });

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { generateArrangement } from "./api";
-import GeneratorForm      from "./components/GeneratorForm";
-import ArrangementPreview from "./components/ArrangementPreview";
-import DownloadButton     from "./components/DownloadButton";
+import { useAuth }         from "./components/LoginGate";
+import GeneratorForm       from "./components/GeneratorForm";
+import ArrangementPreview  from "./components/ArrangementPreview";
+import DownloadButton      from "./components/DownloadButton";
 
 export default function App() {
+  const { onExpired } = useAuth();
   const [loading, setLoading] = useState(false);
   const [result,  setResult]  = useState(null);   // { arrangement, midi_b64 }
   const [error,   setError]   = useState(null);
@@ -18,7 +20,11 @@ export default function App() {
       const data = await generateArrangement(formData);
       setResult(data);
     } catch (err) {
-      setError(err.message || "Unknown error");
+      if (err.message === "SESSION_EXPIRED") {
+        onExpired(); // redirect back to login
+      } else {
+        setError(err.message || "Unknown error");
+      }
     } finally {
       setLoading(false);
     }
