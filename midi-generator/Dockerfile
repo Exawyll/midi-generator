@@ -1,10 +1,7 @@
 # ── Stage 1 : build du frontend React ────────────────────────────────────────
-FROM node:20-slim AS frontend-builder
+FROM node:22-slim AS frontend-builder
 
 WORKDIR /build
-
-# Mettre à jour npm (node:20-slim embarque npm 10.x qui a un bug "Exit handler never called")
-RUN npm install -g npm@11
 
 COPY frontend/ .
 
