@@ -1,0 +1,71 @@
+# cloudbuild.yaml — CI/CD pour midi-generator sur GCP
+#
+# Prérequis à exécuter UNE SEULE FOIS avant le premier build :
+#
+#   # Créer l'Artifact Registry
+#   gcloud artifacts repositories create midi-generator \
+#     --repository-format=docker \
+#     --location=europe-west1 \
+#     --project=midi-generator-489519
+#
+#   # Créer les secrets dans Secret Manager
+#   echo -n "sk-ant-..." | gcloud secrets create ANTHROPIC_API_KEY --data-file=- --project=midi-generator-489519
+#   echo -n "ton-mot-de-passe" | gcloud secrets create APP_PASSWORD --data-file=- --project=midi-generator-489519
+#   echo -n "$(openssl rand -hex 32)" | gcloud secrets create JWT_SECRET --data-file=- --project=midi-generator-489519
+#
+#   # Autoriser le compte Cloud Build à lire les secrets et déployer
+#   PROJECT_NUMBER=$(gcloud projects describe midi-generator-489519 --format='value(projectNumber)')
+#   gcloud projects add-iam-policy-binding midi-generator-489519 \
+#     --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+#     --role="roles/secretmanager.secretAccessor"
+#   gcloud projects add-iam-policy-binding midi-generator-489519 \
+#     --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+#     --role="roles/run.admin"
+#   gcloud projects add-iam-policy-binding midi-generator-489519 \
+#     --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+#     --role="roles/iam.serviceAccountUser"
+
+substitutions:
+  _REGION: europe-west1
+  _SERVICE: midi-generator
+  _IMAGE: europe-west1-docker.pkg.dev/midi-generator-489519/midi-generator/app
+
+steps:
+  # ── 1. Build de l'image Docker (multi-stage : React build + Python) ──────────
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - -t
+      - $_IMAGE:$COMMIT_SHA
+      - -t
+      - $_IMAGE:latest
+      - midi-generator   # répertoire contenant le Dockerfile
+
+  # ── 2. Push vers Artifact Registry ──────────────────────────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    waitFor: [build]
+    args:
+      - push
+      - --all-tags
+      - $_IMAGE
+
+  # ── 3. Déploiement sur Cloud Run ─────────────────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
+    waitFor: [push]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE
+      - --image=$_IMAGE:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --set-secrets=ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,APP_PASSWORD=APP_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

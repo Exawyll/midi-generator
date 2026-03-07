@@ -7,8 +7,12 @@ Start with:
 
 import base64
 import logging
+import os
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from models import GenerateRequest, GenerateResponse
@@ -108,3 +112,19 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
 
     midi_b64 = base64.b64encode(midi_bytes).decode("utf-8")
     return GenerateResponse(arrangement=arrangement, midi_b64=midi_b64)
+
+
+# ── Frontend static serving (production only) ─────────────────────────────────
+# En prod (Cloud Run), le frontend buildé est copié dans ./static par le Dockerfile.
+# En dev, Vite tourne séparément sur :5173 — ce bloc est ignoré.
+
+_STATIC = Path(__file__).parent / "static"
+
+if _STATIC.exists():
+    # Servir les assets Vite (JS/CSS hashés) avec cache long
+    app.mount("/assets", StaticFiles(directory=str(_STATIC / "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str) -> FileResponse:
+        """Catch-all → index.html pour le routing côté client (React Router compatible)."""
+        return FileResponse(str(_STATIC / "index.html"))
