@@ -34,11 +34,16 @@ steps:
   # ── 1. Build du frontend dans le worker Cloud Build (pas dans Docker) ────────
   # Évite le bug npm "Exit handler never called" qui survient quand npm tourne
   # dans un Docker imbriqué sur les workers Cloud Build.
+  # Le package-lock.json est généré sur macOS arm64 et verrouille des packages
+  # platform-specific (@rollup/rollup-darwin-arm64) qui font crasher npm 10.x sur Linux.
+  # On le supprime pour forcer une résolution fraîche sur linux/amd64.
   - name: node:22
     id: npm-install
     dir: midi-generator/frontend
-    entrypoint: npm
-    args: [install, --include=dev]
+    entrypoint: bash
+    args:
+      - -c
+      - rm -f package-lock.json && npm install --include=dev
 
   - name: node:22
     id: npm-build
